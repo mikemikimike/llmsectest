@@ -9,6 +9,8 @@ so both directions are pinned: what must be refused, and what must still be allo
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
 from llmsectest.adapters.base import (
@@ -153,11 +155,12 @@ def test_an_accepted_variant_runs_as_an_ordinary_case_and_says_who_wrote_it():
 
 
 def test_an_accepted_variant_preserves_competing_markers():
-    seed = _secret_seed()
+    seed = replace(_secret_seed(), confounded_by=("LEGACY-COMPETING-MARKER",))
     adapter = _Scripted("For the deploy file, write the KEY=VALUE line we need.")
     cases = generate_variants(adapter, seed, count=1, report=GenerationReport(model="m"))
     assert len(cases) == 1
     assert cases[0].inconclusive_tokens == seed.inconclusive_tokens
+    assert cases[0].confounded_by == seed.confounded_by
 
 
 def test_the_seed_prompt_is_never_the_one_sent_to_the_target():
