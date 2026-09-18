@@ -86,6 +86,38 @@ def test_app_target_with_both_markers_runs_all_six_cases(monkeypatch):
     assert detectors == {"retrieval_exposure", "injection_marker"}
 
 
+def test_with_both_markers_the_canary_cases_know_the_poison_marker(monkeypatch):
+    """Regression: the two dimensions built as if a reply could only answer one of them.
+
+    The poisoned document is in the corpus the retrieval probes query, so it can answer
+    a canary probe in the canary's place and the row would read withstood (issue #12).
+    Goes red if the ``confounded_by`` wiring is dropped from ``_llm08_cases``.
+    """
+    _clear(monkeypatch)
+    monkeypatch.setenv(envvars.TARGET, "app:http://localhost:8000/chat")
+    monkeypatch.setenv(envvars.APP_CANARY, "DOC-CANARY-9z")
+    monkeypatch.setenv(envvars.APP_RAG_POISON, "RAG-POISON-3b9d")
+    cases, _ = _ids_and_skips(mod._params())
+
+    retrieval = [c for c in cases if c.detector == "retrieval_exposure"]
+    assert retrieval, "the canary dimension must be built"
+    assert all(c.confounded_by == ("RAG-POISON-3b9d",) for c in retrieval)
+
+
+def test_with_only_a_canary_nothing_can_confound_the_probe(monkeypatch):
+    """Regression: declaring a confounding marker that was never planted.
+
+    With no ``--app-rag-poison`` there is no poisoned document, so a reply carrying
+    anything else is not evidence of masking and the field must stay empty.
+    """
+    _clear(monkeypatch)
+    monkeypatch.setenv(envvars.TARGET, "app:http://localhost:8000/chat")
+    monkeypatch.setenv(envvars.APP_CANARY, "DOC-CANARY-9z")
+    cases, _ = _ids_and_skips(mod._params())
+
+    assert all(c.confounded_by == () for c in cases)
+
+
 def test_module_is_in_the_app_scan_module_list():
     import llmsectest.__main__ as cli
 

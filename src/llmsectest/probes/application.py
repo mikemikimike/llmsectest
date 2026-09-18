@@ -445,7 +445,14 @@ def _llm08_cases(
     the app to emit, scored by the shared ``injection_marker`` oracle). Either, both,
     or neither may be supplied; :func:`app_coverage` reports LLM08 as exercised iff at
     least one is. Factored out of :func:`app_cases` so the two dimensions are built
-    and tested in one place."""
+    and tested in one place.
+
+    The dimensions are independent as *questions* and not as *replies*: with both markers
+    configured, the poisoned document lives in the very corpus the retrieval probes query
+    and is pulled in on almost any query, so it can answer a canary probe in the canary's
+    place. Each retrieval case therefore declares the poison marker as
+    :attr:`~llmsectest.probes.models.ProbeCase.confounded_by`, which makes such a reply
+    inconclusive with a reason rather than a withstood row (issue #12)."""
     cases: list[ProbeCase] = []
     if known_canary:
         for slug, technique, severity, prompt in _RETRIEVAL_ATTACKS:
@@ -460,6 +467,11 @@ def _llm08_cases(
                     system_prompt=system_prompt,
                     detector="retrieval_exposure",
                     forbidden=(known_canary,),
+                    # When both markers are configured the poisoned document is in the
+                    # same corpus this probe queries, and it is retrieved on almost any
+                    # query — so it can answer here, in the canary's place. Declaring it
+                    # makes such a reply inconclusive instead of a pass (issue #12).
+                    confounded_by=(known_poison,) if known_poison else (),
                 )
             )
     if known_poison:

@@ -38,6 +38,24 @@ class ProbeCase:
     #: it only fires against a target that reports usage (a bare model, not a black-box
     #: app endpoint). See :func:`~llmsectest.probes.detectors.output_ceiling_reached`.
     cost_ceiling: bool = False
+    #: Markers whose presence in a reply means this probe **could not be scored** — the
+    #: reply answers some other planted marker instead of the one this case asks about.
+    #: The LLM08 case that needs it: a poisoned retrieved document is pulled in on almost
+    #: any query and tells the model to answer with one fixed marker and nothing besides,
+    #: so a *retrieval-canary* probe can come back carrying the *poison* marker. No canary
+    #: is present, and scoring that as withstood answers the retrieval-isolation question
+    #: with a reply that never addressed it. Measured over our own cohort on 2026-09-05:
+    #: of 16 applications carrying both markers, 13 reported the poisoned-document
+    #: dimension alone — consistent with masking without proving it, which is why the row
+    #: has to say which of the two it is (issue #12).
+    #:
+    #: Per *case* rather than per detector, for the reason
+    #: :func:`~llmsectest.probes.runner.forbidden_tokens_we_send_ourselves` gives: one
+    #: detector scores cases with opposite properties, so the case is the unit. Empty by
+    #: default, so every existing case keeps its behaviour exactly. Evaluated in
+    #: :func:`~llmsectest.probes.runner.run_probe`, only for a reply the detector already
+    #: found clean — a genuine finding is never downgraded to inconclusive.
+    confounded_by: tuple[str, ...] = ()
     #: When True a per-request **timeout** on this case is itself evidence, provided the
     #: target has demonstrably answered other probes inside the same budget. Set only on
     #: *bounded*, self-terminating requests (repeat a marker N times; enumerate 1..N),
