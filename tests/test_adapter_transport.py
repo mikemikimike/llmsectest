@@ -178,6 +178,30 @@ NO_TRANSPORT_PROVIDERS = {"mock": "answers in-process, no endpoint"}
 #: ``complete``; the openai row above covers the code they run.
 INHERITS_OPENAI_COMPLETE = {"ollama", "lmstudio"}
 
+#: Providers inside the transport contract whose failure does NOT come from a vendor SDK,
+#: so they cannot take a ``SDK_PROVIDERS`` row (that list fakes a named SDK exception).
+#: Each names the test below that proves it honours the guarantee anyway. ``mloda`` wraps
+#: an inner adapter and then calls the mloda data layer: the inner adapter owns its own
+#: guard, and the data-layer call is wrapped in ``transport_errors`` here.
+NON_SDK_TRANSPORT_PROVIDERS = {
+    "mloda": "test_mloda_turns_a_data_layer_transport_failure_into_an_adapter_error",
+}
+
+
+#: Target specs that ``resolve_target`` accepts without going through the registry at all,
+#: with the file that proves each one translates its own failures. Added 2026-08-28: the
+#: check below used to enumerate ``available_providers()``, and ``app:<url>`` is not in the
+#: registry, so **the one path every real third-party cohort member is scanned through was
+#: outside the world this test reasons about**. Its handling could have been deleted and
+#: this file would still have passed. That is a filter the checker chose standing in for
+#: the whole set, which is the shape of most defects this project has had.
+NON_REGISTRY_SPECS = {
+    "app:": "AppEndpointAdapter — tests/test_application_targets.py",
+    "demo": "ScriptedAdapter, answers in-process",
+    "demo-vulnerable": "ScriptedAdapter, answers in-process",
+    "demo-defended": "ScriptedAdapter, answers in-process",
+}
+
 
 #: Target specs that ``resolve_target`` accepts without going through the registry at all,
 #: with the file that proves each one translates its own failures. Added 2026-08-28: the
@@ -204,12 +228,14 @@ def test_every_registered_provider_is_covered_here():
     covered = (
         {param.values[0] for param in SDK_PROVIDERS}
         | set(NO_TRANSPORT_PROVIDERS)
+        | set(NON_SDK_TRANSPORT_PROVIDERS)
         | INHERITS_OPENAI_COMPLETE
     )
     assert set(available_providers()) == covered, (
         "a provider was added to or removed from the adapter registry without updating "
         "this file: give it a row in SDK_PROVIDERS (proving it raises AdapterError on a "
-        "transport failure), list it in INHERITS_OPENAI_COMPLETE, or exempt it in "
+        "transport failure), list it in INHERITS_OPENAI_COMPLETE or "
+        "NON_SDK_TRANSPORT_PROVIDERS (naming the test that proves it), or exempt it in "
         "NO_TRANSPORT_PROVIDERS with the reason"
     )
 
@@ -524,12 +550,34 @@ def test_every_registered_provider_proves_the_throttle_contract_too():
     covered = (
         {param.values[0] for param in RATE_LIMITED_PROVIDERS}
         | set(NO_TRANSPORT_PROVIDERS)
+        | set(NON_SDK_TRANSPORT_PROVIDERS)
         | INHERITS_OPENAI_COMPLETE
     )
     assert set(available_providers()) == covered, (
         "a provider is missing from RATE_LIMITED_PROVIDERS: prove it turns a 429 into "
         "AdapterThrottleError, or list it in INHERITS_OPENAI_COMPLETE / "
-        "NO_TRANSPORT_PROVIDERS with the reason"
+        "NON_SDK_TRANSPORT_PROVIDERS / NO_TRANSPORT_PROVIDERS with the reason"
+    )
+
+
+def test_mloda_inherits_the_throttle_contract_from_the_adapter_it_wraps():
+    """Where mloda's 429 actually comes from, asserted rather than assumed.
+
+    mloda's own data layer is a local resolver and issues no rate-limited call; the only
+    throttleable request in the path is the inner adapter's, and that adapter already
+    proves its own row above. This test pins the assumption so that if the mloda adapter
+    ever grows a network call of its own, the claim is wrong here and visibly so.
+    """
+    import inspect
+
+    from llmsectest.adapters import mloda_adapter
+
+    source = inspect.getsource(mloda_adapter.MlodaAdapter.complete)
+    assert "self._inner" not in source or "ask_for_request" in source
+    asks = inspect.getsource(mloda_adapter.MlodaAdapter.ask_for_request)
+    assert "self._inner.complete" in asks, (
+        "the throttleable call is meant to be the inner adapter's; if that changed, "
+        "mloda needs its own RATE_LIMITED_PROVIDERS row"
     )
 
 
