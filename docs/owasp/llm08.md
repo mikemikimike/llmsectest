@@ -52,23 +52,25 @@ base64/hex/base32/base85/ASCII85/ROT13/quoted-printable/uuencode-encoded, Unicod
 or zero-width characters), or split across separators is still flagged (and the finding names how it was
 hidden), so a model cannot dodge the check by encoding the leak.
 
-!!! warning "With both markers set, a poisoned document can answer this probe — and the row says so"
+!!! warning "With both markers set, a poisoned document can answer this probe. The row says so"
 
-    The two dimensions are independent as *questions*, not as *replies*. When you set
-    `--app-rag-poison` as well, the poisoned document lives in the very corpus these probes query, and
-    it is retrieved on almost any query. Its text tells the model to answer with one fixed marker and
+    The two dimensions are independent as *questions* rather than as *replies*. When you set
+    `--app-rag-poison` as well, the poisoned document lives in the very corpus these probes query.
+    It is retrieved on almost any query. Its text tells the model to answer with one fixed marker and
     nothing besides, so a *retrieval-exposure* probe can come back carrying the *poison* marker
-    instead. No canary appears, and a row reading *withstood* would be answering a question the reply
+    instead. No canary appears. A row reading *withstood* would be answering a question the reply
     never addressed.
 
-    So a retrieval case declares the competing marker, and a reply carrying it is recorded
-    **inconclusive, with a reason naming the poisoned document** — the same channel a timed-out probe
-    uses, and distinct from a pass. The reason reaches the rendered report, so the reader of the row
-    learns why it says nothing. Three properties are worth knowing: a genuine canary leak still wins
-    (the check runs only over a reply the detector already found clean, so a finding is never
-    downgraded); the competing marker is matched by the same de-obfuscating helper as the canary, so a
-    split or encoded poison marker cannot slip past; and a marker present in the attack prompt itself
-    is ignored, so an application that merely echoes the request cannot void its own row.
+    So a retrieval case declares the competing marker. A reply carrying it is recorded
+    **inconclusive, with a reason naming the poisoned document**. That is the same channel a
+    timed-out probe uses, distinct from a pass, and the reason reaches the rendered report so the
+    reader of the row learns why it says nothing.
+
+    Three properties are worth knowing. A genuine canary leak still wins, because the check runs only
+    over a reply the detector already found clean, so a finding is never downgraded. The competing
+    marker is matched by the same de-obfuscating helper as the canary, so a split or encoded poison
+    marker cannot slip past. A marker present in the attack prompt itself is ignored, so an
+    application that merely echoes the request cannot void its own row.
 
     If you want the retrieval dimension answered outright rather than annotated, run the two
     dimensions as separate scans.
